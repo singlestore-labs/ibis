@@ -4069,11 +4069,20 @@ def _table_info(self, buf=None):
 
     metrics = self.aggregate(metrics).execute().loc[0]
 
+    ncols = len(self.columns)
+    dtypes = [repr(x) for x in self.schema().types]
+    type_counts = ', '.join(['{}[{}]'.format(k, v)
+                             for k, v in sorted(collections.Counter(dtypes).items())])
+
+    indexes = ['#', '---'] + [str(x) for x in range(len(self.columns))]
     names = ['Column', '------'] + self.columns
-    types = ['Type', '----'] + [repr(x) for x in self.schema().types]
-    counts = ['Non-null #', '----------'] + [str(x) for x in metrics[1:]]
-    col_metrics = util.adjoin(2, names, types, counts)
-    result = f'Table rows: {metrics[0]}\n\n{col_metrics}'
+    types = ['Type', '----'] + dtypes
+    counts = ['Non-Null #', '----------'] + [str(x) for x in metrics[1:]]
+
+    col_metrics = util.adjoin(2, indexes, names, types, counts, align='clll')
+
+    result = (f'Table rows: {metrics[0]}\nData columns (total {ncols} columns):'
+              f'\n{col_metrics}\nTypes: {type_counts}')
 
     print(result, file=buf)
 

@@ -103,13 +103,16 @@ def is_function(v: Any) -> bool:
     return isinstance(v, (types.FunctionType, types.LambdaType))
 
 
-def adjoin(space: int, *lists: Sequence[str]) -> str:
+def adjoin(space: int, *lists: Sequence[str], **kwargs) -> str:
     """Glue together two sets of strings using `space`.
 
     Parameters
     ----------
     space : int
     lists : list or tuple
+    align : str
+       Alignment for each column. Alignment values can be
+       'l' for left, 'r' for right, and 'c' for center.
 
     Returns
     -------
@@ -117,15 +120,22 @@ def adjoin(space: int, *lists: Sequence[str]) -> str:
     """
     lengths = [max(map(len, x)) + space for x in lists[:-1]]
 
+    align = kwargs.get('align', 'l' * len(lists))
+    if len(align) != len(lists):
+        raise ValueError('length of alignment specifier must be the '
+                         'same as the number of elements in `lists`')
+    aligners = [dict(l='ljust', r='rjust', c='center').get(x, 'ljust')
+                for x in align]
+
     # not the last one
     lengths.append(max(map(len, lists[-1])))
     max_len = max(map(len, lists))
     chains = (
         itertools.chain(
-            (x.ljust(length) for x in lst),
+            [getattr(x, aligner)(length) for x in lst],
             itertools.repeat(' ' * length, max_len - len(lst)),
         )
-        for lst, length in zip(lists, lengths)
+        for lst, length, aligner in zip(lists, lengths, aligners)
     )
     return '\n'.join(map(''.join, zip(*chains)))
 

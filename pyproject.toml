@@ -109,6 +109,7 @@ parquet = ["pyarrow"]
 postgres = ["sqlalchemy", "psycopg2"]
 pyspark = ["pyspark", "pyarrow"]
 sqlite = ["sqlalchemy"]
+singlestore = ["sqlalchemy", "pymysql"]
 visualization = ["graphviz"]
 
 [tool.poetry.plugins."ibis.backends"]
@@ -122,6 +123,7 @@ pandas = "ibis.backends.pandas"
 parquet = "ibis.backends.parquet"
 postgres = "ibis.backends.postgres"
 pyspark = "ibis.backends.pyspark"
+singlestore = "ibis.backends.singlestore"
 spark = "ibis.backends.pyspark"
 sqlite = "ibis.backends.sqlite"
 

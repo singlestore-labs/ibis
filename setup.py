@@ -34,6 +34,8 @@ packages = [
     "ibis.backends.postgres.tests",
     "ibis.backends.pyspark",
     "ibis.backends.pyspark.tests",
+    "ibis.backends.singlestore",
+    "ibis.backends.singlestore.tests",
     "ibis.backends.sqlite",
     "ibis.backends.sqlite.tests",
     "ibis.backends.tests",
@@ -103,6 +105,7 @@ extras_require = {
     "parquet": ["pyarrow>=1,<7"],
     "postgres": ["psycopg2>=2.7,<3", "sqlalchemy>=1.3,<1.4"],
     "pyspark": ["pyarrow>=1,<7", "pyspark>=2.4.3,<4"],
+    "singlestore": ["pymysql>=1,<2", "sqlalchemy>=1.3,<1.4"],
     "sqlite": ["sqlalchemy>=1.3,<1.4"],
     "visualization": ["graphviz>=0.16,<0.20"],
 }
@@ -119,6 +122,7 @@ entry_points = {
         "parquet = ibis.backends.parquet",
         "postgres = ibis.backends.postgres",
         "pyspark = ibis.backends.pyspark",
+        "singlestore = ibis.backends.singlestore",
         "spark = ibis.backends.pyspark",
         "sqlite = ibis.backends.sqlite",
     ]

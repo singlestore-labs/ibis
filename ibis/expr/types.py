@@ -29,9 +29,12 @@ class Expr:
     def __init__(self, arg):
         # TODO: all inputs must inherit from a common table API
         self._arg = arg
+        self._last_result = None
 
     def __repr__(self):
         from ibis.expr.format import FormatMemo
+
+        self._last_result = None
 
         if not config.options.interactive:
             return self._repr(memo=FormatMemo(get_text_repr=True))
@@ -46,7 +49,19 @@ class Expr:
             )
             return output
         else:
+            self._last_result = result
             return repr(result)
+
+    def _repr_html_(self):
+        out = None
+        if self._last_result is None:
+            out = repr(self)
+        if hasattr(self._last_result, '_repr_html_'):
+            out = self._last_result._repr_html_()
+        elif out:
+            out = f'<pre>{out}</pre>'
+        self._last_result = None
+        return out
 
     def __hash__(self):
         return hash(self._key)
