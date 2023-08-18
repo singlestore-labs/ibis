@@ -256,6 +256,7 @@ def test_create_temporary_table_from_schema(tmpcon, new_schema):
         "pandas",
         "oracle",
         "postgres",
+        "singlestoredb",
         "sqlite",
         "snowflake",
         "polars",
@@ -517,6 +518,7 @@ def test_list_databases(alchemy_con):
         "mssql": {"ibis_testing"},
         "mysql": {"ibis_testing", "information_schema"},
         "duckdb": {"memory"},
+        "singlestoredb": {"ibis_testing", "information_schema"},
         "snowflake": {"IBIS_TESTING"},
         "trino": {"memory"},
         "oracle": set(),
@@ -525,9 +527,9 @@ def test_list_databases(alchemy_con):
 
 
 @pytest.mark.never(
-    ["bigquery", "postgres", "mssql", "mysql", "snowflake", "oracle"],
+    ["bigquery", "postgres", "mssql", "mysql", "singlestoredb", "snowflake", "oracle"],
     reason="backend does not support client-side in-memory tables",
-    raises=(sa.exc.OperationalError, TypeError),
+    raises=(sa.exc.OperationalError, TypeError, ValueError),
 )
 @pytest.mark.notyet(
     ["trino"], reason="memory connector doesn't allow writing to tables"
@@ -635,6 +637,11 @@ def test_unsigned_integer_type(alchemy_con, alchemy_temp_table):
                 ),
             ],
             id="pyspark_with_warehouse_no_params",
+        ),
+        param(
+            "singlestoredb://ibis:ibis@localhost:8306",
+            marks=mark.singlestoredb,
+            id="singlestoredb",
         ),
     ],
 )
@@ -1011,7 +1018,7 @@ def test_repr_mimebundle(alltypes, interactive, expr_type, monkeypatch):
 
 
 @pytest.mark.never(
-    ["postgres", "mysql", "bigquery"],
+    ["postgres", "mysql", "bigquery", "singlestoredb"],
     reason="These backends explicitly do support Geo operations",
 )
 @pytest.mark.parametrize("op", [ops.GeoDistance, ops.GeoAsText, ops.GeoUnaryUnion])
@@ -1096,6 +1103,11 @@ def test_set_backend_name(name, monkeypatch):
             marks=mark.postgres,
             id="postgres",
         ),
+        param(
+            "singlestoredb://ibis:ibis@localhost:8306",
+            marks=mark.singlestoredb,
+            id="singlestoredb",
+        ),
     ],
 )
 def test_set_backend_url(url, monkeypatch):
@@ -1120,6 +1132,7 @@ def test_set_backend_url(url, monkeypatch):
         "polars",
         "postgres",
         "pyspark",
+        "singlestoredb",
         "sqlite",
     ],
     reason="backend doesn't support timestamp with scale parameter",
@@ -1145,7 +1158,7 @@ def test_create_table_timestamp(con, temp_table):
     ["mssql"],
     reason="mssql supports support temporary tables through naming conventions",
 )
-def test_persist_expression_ref_count(con, alltypes):
+def test_persist_expression_ref_count(con, backend, alltypes):
     non_persisted_table = alltypes.mutate(test_column="calculation")
     persisted_table = non_persisted_table.cache()
 
@@ -1153,7 +1166,7 @@ def test_persist_expression_ref_count(con, alltypes):
 
     # ref count is unaffected without a context manager
     assert con._query_cache.refs[op] == 1
-    tm.assert_frame_equal(non_persisted_table.to_pandas(), persisted_table.to_pandas())
+    backend.assert_frame_equal(non_persisted_table.to_pandas(), persisted_table.to_pandas())
     assert con._query_cache.refs[op] == 1
 
 
@@ -1162,10 +1175,10 @@ def test_persist_expression_ref_count(con, alltypes):
     ["mssql"],
     reason="mssql supports support temporary tables through naming conventions",
 )
-def test_persist_expression(alltypes):
+def test_persist_expression(con, backend, alltypes):
     non_persisted_table = alltypes.mutate(test_column="calculation", other_calc="xyz")
     persisted_table = non_persisted_table.cache()
-    tm.assert_frame_equal(non_persisted_table.to_pandas(), persisted_table.to_pandas())
+    backend.assert_frame_equal(non_persisted_table.to_pandas(), persisted_table.to_pandas())
 
 
 @mark.notimpl(["datafusion", "bigquery", "impala", "trino", "druid"])
@@ -1173,12 +1186,12 @@ def test_persist_expression(alltypes):
     ["mssql"],
     reason="mssql supports support temporary tables through naming conventions",
 )
-def test_persist_expression_contextmanager(alltypes):
+def test_persist_expression_contextmanager(con, backend, alltypes):
     non_cached_table = alltypes.mutate(
         test_column="calculation", other_column="big calc"
     )
     with non_cached_table.cache() as cached_table:
-        tm.assert_frame_equal(non_cached_table.to_pandas(), cached_table.to_pandas())
+        backend.assert_frame_equal(non_cached_table.to_pandas(), cached_table.to_pandas())
 
 
 @mark.notimpl(["datafusion", "bigquery", "impala", "trino", "druid"])
@@ -1186,13 +1199,13 @@ def test_persist_expression_contextmanager(alltypes):
     ["mssql"],
     reason="mssql supports support temporary tables through naming conventions",
 )
-def test_persist_expression_contextmanager_ref_count(con, alltypes):
+def test_persist_expression_contextmanager_ref_count(con, backend, alltypes):
     non_cached_table = alltypes.mutate(
         test_column="calculation", other_column="big calc 2"
     )
     op = non_cached_table.op()
     with non_cached_table.cache() as cached_table:
-        tm.assert_frame_equal(non_cached_table.to_pandas(), cached_table.to_pandas())
+        backend.assert_frame_equal(non_cached_table.to_pandas(), cached_table.to_pandas())
         assert con._query_cache.refs[op] == 1
     assert con._query_cache.refs[op] == 0
 
@@ -1202,13 +1215,13 @@ def test_persist_expression_contextmanager_ref_count(con, alltypes):
     ["mssql"],
     reason="mssql supports support temporary tables through naming conventions",
 )
-def test_persist_expression_multiple_refs(con, alltypes):
+def test_persist_expression_multiple_refs(con, backend, alltypes):
     non_cached_table = alltypes.mutate(
         test_column="calculation", other_column="big calc 2"
     )
     op = non_cached_table.op()
     with non_cached_table.cache() as cached_table:
-        tm.assert_frame_equal(non_cached_table.to_pandas(), cached_table.to_pandas())
+        backend.assert_frame_equal(non_cached_table.to_pandas(), cached_table.to_pandas())
 
         name1 = cached_table.op().name
 

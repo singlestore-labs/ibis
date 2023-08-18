@@ -515,6 +515,7 @@ def ddl_con(ddl_backend):
             "mysql",
             "oracle",
             "postgres",
+            "singlestoredb",
             "snowflake",
             "sqlite",
             "trino",

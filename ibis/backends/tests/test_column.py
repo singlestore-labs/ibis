@@ -19,6 +19,7 @@ import ibis.common.exceptions as com
         "polars",
         "postgres",
         "pyspark",
+        "singlestoredb",
         "snowflake",
         "trino",
         "druid",

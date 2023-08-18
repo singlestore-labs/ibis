@@ -126,13 +126,13 @@ def test_scalar_fillna_nullif(con, expr, expected):
         param(
             "nan_col",
             _.nan_col.isnan(),
-            marks=pytest.mark.notimpl(["datafusion", "mysql", "sqlite"]),
+            marks=pytest.mark.notimpl(["datafusion", "mysql", "singlestoredb", "sqlite"]),
             id="nan_col",
         ),
         param(
             "none_col",
             _.none_col.isnull(),
-            marks=[pytest.mark.notimpl(["datafusion", "mysql"])],
+            marks=[pytest.mark.notimpl(["datafusion", "mysql", "singlestoredb"])],
             id="none_col",
         ),
     ],
@@ -164,6 +164,7 @@ def test_isna(backend, alltypes, col, filt):
                     "impala",
                     "postgres",
                     "mysql",
+                    "singlestoredb",
                     "snowflake",
                     "polars",
                     "trino",
@@ -314,6 +315,7 @@ def test_filter(backend, alltypes, sorted_df, predicate_fn, expected_fn):
         "impala",
         "mysql",
         "postgres",
+        "singlestoredb",
         "sqlite",
         "snowflake",
         "polars",
@@ -365,7 +367,7 @@ def test_case_where(backend, alltypes, df):
 
 
 # TODO: some of these are notimpl (datafusion) others are probably never
-@pytest.mark.notimpl(["datafusion", "mysql", "sqlite", "mssql", "druid", "oracle"])
+@pytest.mark.notimpl(["datafusion", "mysql", "singlestoredb", "sqlite", "mssql", "druid", "oracle"])
 def test_select_filter_mutate(backend, alltypes, df):
     """Test that select, filter and mutate are executed in right order.
 
@@ -818,6 +820,7 @@ def test_exists(batting, awards_players, method_name):
         "datafusion",
         "mssql",
         "mysql",
+        "singlestoredb",
         "pandas",
         "pyspark",
         "polars",
@@ -961,7 +964,7 @@ def test_many_subqueries(con, snapshot):
     raises=com.OperationNotDefinedError,
 )
 @pytest.mark.notyet(
-    ["datafusion", "impala", "mssql", "mysql", "sqlite"],
+    ["datafusion", "impala", "mssql", "mysql", "singlestoredb", "sqlite"],
     reason="backend doesn't support arrays and we don't implement pivot_longer with unions yet",
     raises=com.OperationNotDefinedError,
 )
@@ -1022,7 +1025,7 @@ def test_pivot_wider(backend):
             ["cut"],
             marks=[
                 pytest.mark.notimpl(
-                    ["mssql", "mysql"], raises=com.OperationNotDefinedError
+                    ["mssql", "mysql", "singlestoredb"], raises=com.OperationNotDefinedError
                 ),
             ],
             id="one",
@@ -1031,7 +1034,7 @@ def test_pivot_wider(backend):
             ["clarity", "cut"],
             marks=[
                 pytest.mark.notimpl(
-                    ["mssql", "mysql"], raises=com.OperationNotDefinedError
+                    ["mssql", "mysql", "singlestoredb"], raises=com.OperationNotDefinedError
                 ),
             ],
             id="many",
@@ -1074,7 +1077,7 @@ def test_distinct_on_keep(backend, on, keep):
         idx=ibis.row_number().over(order_by=_.one, rows=(None, 0))
     )
 
-    requires_cache = backend.name() in ("mysql", "impala")
+    requires_cache = backend.name() in ("mysql", "singlestoredb", "impala")
 
     if requires_cache:
         t = t.cache()
@@ -1096,7 +1099,7 @@ def test_distinct_on_keep(backend, on, keep):
             ["cut"],
             marks=[
                 pytest.mark.notimpl(
-                    ["mssql", "mysql"], raises=com.OperationNotDefinedError
+                    ["mssql", "mysql", "singlestoredb"], raises=com.OperationNotDefinedError
                 ),
             ],
             id="one",
@@ -1105,7 +1108,7 @@ def test_distinct_on_keep(backend, on, keep):
             ["clarity", "cut"],
             marks=[
                 pytest.mark.notimpl(
-                    ["mssql", "mysql"], raises=com.OperationNotDefinedError
+                    ["mssql", "mysql", "singlestoredb"], raises=com.OperationNotDefinedError
                 ),
             ],
             id="many",
@@ -1139,7 +1142,7 @@ def test_distinct_on_keep_is_none(backend, on):
         idx=ibis.row_number().over(order_by=_.one, rows=(None, 0))
     )
 
-    requires_cache = backend.name() in ("mysql", "impala")
+    requires_cache = backend.name() in ("mysql", "singlestoredb", "impala")
 
     if requires_cache:
         t = t.cache()
@@ -1161,6 +1164,7 @@ def test_distinct_on_keep_is_none(backend, on):
         "datafusion",
         "druid",  # ???
         "mysql",  # CHECKSUM TABLE but not column
+        "singlestoredb",
         "trino",  # checksum returns varbinary
     ]
 )
@@ -1184,6 +1188,7 @@ def test_hash_consistent(backend, alltypes):
         "oracle",
         "postgres",
         "pyspark",
+        "singlestoredb",
         "snowflake",
         "sqlite",
     ]
@@ -1234,6 +1239,7 @@ def test_try_cast_expected(con, from_val, to_type, expected):
         "oracle",
         "postgres",
         "pyspark",
+        "singlestoredb",
         "snowflake",
         "sqlite",
     ]
@@ -1261,6 +1267,7 @@ def test_try_cast_table(con):
         "oracle",
         "postgres",
         "pyspark",
+        "singlestoredb",
         "snowflake",
         "sqlite",
     ]

@@ -254,6 +254,7 @@ def test_numeric_literal(con, backend, expr, expected_types):
                 "pandas": decimal.Decimal("1.1"),
                 "pyspark": decimal.Decimal("1.1"),
                 "mysql": 1.1,
+                "singlestoredb": 1.1,
                 "mssql": 1.1,
                 "druid": 1.1,
                 "datafusion": decimal.Decimal("1.1"),
@@ -299,6 +300,7 @@ def test_numeric_literal(con, backend, expr, expected_types):
                 "pandas": decimal.Decimal("1.1"),
                 "pyspark": decimal.Decimal("1.1"),
                 "mysql": 1.1,
+                "singlestoredb": 1.1,
                 "clickhouse": decimal.Decimal("1.1"),
                 "dask": decimal.Decimal("1.1"),
                 "mssql": 1.1,
@@ -342,6 +344,7 @@ def test_numeric_literal(con, backend, expr, expected_types):
                 "pandas": decimal.Decimal("1.1"),
                 "pyspark": decimal.Decimal("1.1"),
                 "mysql": 1.1,
+                "singlestoredb": 1.1,
                 "clickhouse": decimal.Decimal(
                     "1.10000000000000003193790845333396190208"
                 ),
@@ -429,6 +432,12 @@ def test_numeric_literal(con, backend, expr, expected_types):
                     raises=sa.exc.OperationalError,
                 ),
                 pytest.mark.broken(
+                    ["singlestoredb"],
+                    "(sqlalchemy.err.OperationalError) (1054, \"Unknown column 'Infinity' in 'field list'\")"
+                    "[SQL: SELECT %(param_1)s AS `Decimal('Infinity')`]",
+                    raises=sa.exc.OperationalError,
+                ),
+                pytest.mark.broken(
                     ["mssql"],
                     "(pymssql._pymssql.ProgrammingError) (207, b\"Invalid column name 'Infinity'."
                     "DB-Lib error message 20018, severity 16:\nGeneral SQL Server error: "
@@ -500,6 +509,12 @@ def test_numeric_literal(con, backend, expr, expected_types):
                 pytest.mark.broken(
                     ["mysql"],
                     "(pymysql.err.OperationalError) (1054, \"Unknown column 'Infinity' in 'field list'\")"
+                    "[SQL: SELECT %(param_1)s AS `Decimal('-Infinity')`]",
+                    raises=sa.exc.OperationalError,
+                ),
+                pytest.mark.broken(
+                    ["singlestoredb"],
+                    "(sqlalchemy.err.OperationalError) (1054, \"Unknown column 'Infinity' in 'field list'\")"
                     "[SQL: SELECT %(param_1)s AS `Decimal('-Infinity')`]",
                     raises=sa.exc.OperationalError,
                 ),
@@ -578,6 +593,12 @@ def test_numeric_literal(con, backend, expr, expected_types):
                 pytest.mark.broken(
                     ["mysql"],
                     "(pymysql.err.OperationalError) (1054, \"Unknown column 'NaN' in 'field list'\")"
+                    "[SQL: SELECT %(param_1)s AS `Decimal('NaN')`]",
+                    raises=sa.exc.OperationalError,
+                ),
+                pytest.mark.broken(
+                    ["singlestoredb"],
+                    "(sqlalchemy.err.OperationalError) (1054, \"Unknown column 'NaN' in 'field list'\")"
                     "[SQL: SELECT %(param_1)s AS `Decimal('NaN')`]",
                     raises=sa.exc.OperationalError,
                 ),
@@ -722,7 +743,7 @@ def test_decimal_literal(con, backend, expr, expected_types, expected_result):
     ],
 )
 @pytest.mark.notimpl(
-    ["mysql", "sqlite", "datafusion", "mssql", "oracle"],
+    ["mysql", "singlestoredb", "sqlite", "datafusion", "mssql", "oracle"],
     raises=com.OperationNotDefinedError,
 )
 @pytest.mark.xfail(
@@ -1228,7 +1249,7 @@ def test_floating_mod(backend, alltypes, df):
     ],
 )
 @pytest.mark.notyet(
-    ["datafusion", "duckdb", "mysql", "pyspark", "sqlite"], raises=AssertionError
+    ["datafusion", "duckdb", "mysql", "pyspark", "singlestoredb", "sqlite"], raises=AssertionError
 )
 @pytest.mark.notyet(["mssql"], raises=sa.exc.OperationalError)
 @pytest.mark.notyet(["postgres"], raises=sa.exc.DataError)
@@ -1252,6 +1273,7 @@ def test_divide_by_zero(backend, alltypes, df, column, denominator):
             {
                 "postgres": None,
                 "mysql": 10,
+                "singlestoredb": 10,
                 "snowflake": 38,
                 "trino": 18,
                 "duckdb": None,
@@ -1262,6 +1284,7 @@ def test_divide_by_zero(backend, alltypes, df, column, denominator):
             {
                 "postgres": None,
                 "mysql": 0,
+                "singlestoredb": 0,
                 "snowflake": 0,
                 "trino": 3,
                 "duckdb": None,

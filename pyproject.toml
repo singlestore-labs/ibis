@@ -79,6 +79,7 @@ pyspark = { version = ">=3,<4", optional = true }
 # used to support posix regexen in the pandas, dask and sqlite backends
 regex = { version = ">=2021.7.6", optional = true }
 requests = { version = ">=2,<3", optional = true }
+singlestoredb = { version = ">=0.8", optional = true }
 shapely = { version = ">=2,<3", optional = true }
 # include an explicit dependency on `snowflake-connector-python` because the
 # lack of lower bound on this dependency as specified in `snowflake-sqlalchemy`
@@ -172,6 +173,8 @@ all = [
   "pyspark",
   "regex",
   "requests",
+  "singlestoredb",
+  "sqlalchemy-singlestoredb",
   "shapely",
   "snowflake-connector-python",
   "snowflake-sqlalchemy",
@@ -206,6 +209,11 @@ pandas = ["regex"]
 polars = ["polars"]
 postgres = ["psycopg2", "sqlalchemy", "sqlalchemy-views"]
 pyspark = ["pyspark", "sqlalchemy"]
+singlestoredb = [
+  "singlestoredb",
+  "sqlalchemy-singlestoredb",
+  "sqlalchemy-views",
+]
 snowflake = [
   "snowflake-connector-python",
   "snowflake-sqlalchemy",
@@ -233,6 +241,7 @@ pandas = "ibis.backends.pandas"
 polars = "ibis.backends.polars"
 postgres = "ibis.backends.postgres"
 pyspark = "ibis.backends.pyspark"
+singlestoredb = "ibis.backends.singlestoredb"
 snowflake = "ibis.backends.snowflake"
 sqlite = "ibis.backends.sqlite"
 trino = "ibis.backends.trino"
@@ -355,6 +364,7 @@ markers = [
   "polars: Polars tests",
   "postgres: PostgreSQL tests",
   "pyspark: PySpark tests",
+  "singlestoredb: SinglestoreDB tests",
   "snowflake: Snowflake tests",
   "sqlite: SQLite tests",
   "trino: Trino tests",

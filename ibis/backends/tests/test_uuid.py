@@ -23,6 +23,7 @@ UUID_BACKEND_TYPE = {
     "snowflake": "VARCHAR",
     "trino": "varchar(32)" if SQLALCHEMY2 else "uuid",
     "postgres": "uuid",
+    "singlestoredb": "VARCHAR",
 }
 
 UUID_EXPECTED_VALUES = {
@@ -37,6 +38,7 @@ UUID_EXPECTED_VALUES = {
     "mssql": TEST_UUID,
     "dask": TEST_UUID,
     "oracle": TEST_UUID,
+    "singlestoredb": TEST_UUID,
 }
 
 pytestmark = pytest.mark.notimpl(

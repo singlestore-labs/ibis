@@ -216,7 +216,7 @@ def test_table_dot_sql_does_not_clobber_existing_tables(con, temp_table):
 @dot_sql_notimpl
 @dot_sql_never
 @pytest.mark.notimpl(["oracle"])
-def test_dot_sql_alias_with_params(backend, alltypes, df):
+def test_dot_sql_alias_with_params(con, backend, alltypes, df):
     t = alltypes
     x = t.select(x=t.string_col + " abc").alias("foo")
     result = x.execute()
@@ -227,8 +227,8 @@ def test_dot_sql_alias_with_params(backend, alltypes, df):
 @table_dot_sql_notimpl
 @dot_sql_notimpl
 @dot_sql_never
-@pytest.mark.notimpl(["oracle"])
-def test_dot_sql_reuse_alias_with_different_types(backend, alltypes, df):
+@pytest.mark.notimpl(["oracle", "singlestoredb"])
+def test_dot_sql_reuse_alias_with_different_types(con, backend, alltypes, df):
     foo1 = alltypes.select(x=alltypes.string_col).alias("foo")
     foo2 = alltypes.select(x=alltypes.bigint_col).alias("foo")
     expected1 = df.string_col.rename("x")

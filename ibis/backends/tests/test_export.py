@@ -212,7 +212,7 @@ def test_to_pyarrow_batches_memtable(con):
 
 
 @pytest.mark.notimpl(["dask", "impala", "pyspark"])
-def test_table_to_parquet(tmp_path, backend, awards_players):
+def test_table_to_parquet(con, tmp_path, backend, awards_players):
     outparquet = tmp_path / "out.parquet"
     awards_players.to_parquet(outparquet)
 
@@ -232,6 +232,7 @@ def test_table_to_parquet(tmp_path, backend, awards_players):
         "pandas",
         "polars",
         "postgres",
+        "singlestoredb",
         "snowflake",
         "sqlite",
         "trino",
@@ -288,7 +289,7 @@ def test_memtable_to_file(tmp_path, con, ftype, monkeypatch):
 
 
 @pytest.mark.notimpl(["dask", "impala", "pyspark"])
-def test_table_to_csv(tmp_path, backend, awards_players):
+def test_table_to_csv(tmp_path, con, backend, awards_players):
     outcsv = tmp_path / "out.csv"
 
     # avoid pandas NaNonense
@@ -329,7 +330,7 @@ def test_table_to_csv(tmp_path, backend, awards_players):
                 ),
                 pytest.mark.notyet(["oracle"], raises=sa.exc.DatabaseError),
                 pytest.mark.notyet(["dask"], raises=NotImplementedError),
-                pytest.mark.notyet(["mssql", "mysql"], raises=sa.exc.OperationalError),
+                pytest.mark.notyet(["mssql", "mysql", "singlestoredb"], raises=sa.exc.OperationalError),
                 pytest.mark.notyet(["pyspark"], raises=ParseException),
             ],
         ),

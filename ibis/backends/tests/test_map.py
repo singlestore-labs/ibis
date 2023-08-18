@@ -12,7 +12,7 @@ import ibis.expr.datatypes as dt
 
 pytestmark = [
     pytest.mark.never(
-        ["sqlite", "mysql", "mssql"], reason="Unlikely to ever add map support"
+        ["sqlite", "mysql", "mssql", "singlestoredb"], reason="Unlikely to ever add map support"
     ),
     pytest.mark.notyet(
         ["bigquery", "impala"], reason="Backend doesn't yet implement map types"

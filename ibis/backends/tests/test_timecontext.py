@@ -18,6 +18,7 @@ pytestmark = pytest.mark.notimpl(
         "impala",
         "mysql",
         "postgres",
+        "singlestoredb",
         "sqlite",
         "snowflake",
         "polars",

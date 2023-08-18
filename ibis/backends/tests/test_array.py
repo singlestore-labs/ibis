@@ -35,7 +35,7 @@ except ImportError:
 
 pytestmark = [
     pytest.mark.never(
-        ["sqlite", "mysql", "mssql"],
+        ["sqlite", "mysql", "mssql", "singlestoredb"],
         reason="No array support",
         raises=Exception,
     ),
@@ -193,7 +193,7 @@ duckdb_0_4_0 = pytest.mark.xfail(
 builtin_array = toolz.compose(
     # these will almost certainly never be supported
     pytest.mark.never(
-        ["mysql"],
+        ["mysql", "singlestoredb"],
         reason="array types are unsupported",
         raises=com.OperationNotDefinedError,
     ),
@@ -324,6 +324,7 @@ def test_array_discovery_desired(backend):
         "polars",
         "postgres",
         "pyspark",
+        "singlestoredb",
         "sqlite",
         "trino",
     ],
@@ -490,7 +491,7 @@ def test_array_slice(backend, start, stop):
 
 @builtin_array
 @pytest.mark.notimpl(
-    ["datafusion", "impala", "mssql", "polars", "snowflake", "sqlite", "mysql"],
+    ["datafusion", "impala", "mssql", "polars", "snowflake", "sqlite", "mysql", "singlestoredb"],
     raises=com.OperationNotDefinedError,
 )
 @pytest.mark.notimpl(
@@ -531,7 +532,7 @@ def test_array_map(backend, con, input, output):
 
 @builtin_array
 @pytest.mark.notimpl(
-    ["dask", "datafusion", "impala", "mssql", "pandas", "polars", "snowflake", "mysql"],
+    ["dask", "datafusion", "impala", "mssql", "pandas", "polars", "snowflake", "mysql", "singlestoredb"],
     raises=com.OperationNotDefinedError,
 )
 @pytest.mark.notimpl(
@@ -601,7 +602,7 @@ def test_array_remove(backend, con):
 
 @builtin_array
 @pytest.mark.notimpl(
-    ["dask", "datafusion", "impala", "mssql", "pandas", "polars", "mysql"],
+    ["dask", "datafusion", "impala", "mssql", "pandas", "polars", "mysql", "singlestoredb"],
     raises=com.OperationNotDefinedError,
 )
 @pytest.mark.notimpl(
@@ -680,7 +681,7 @@ def test_array_union(con):
 
 
 @pytest.mark.notimpl(
-    ["dask", "datafusion", "impala", "mssql", "pandas", "polars", "mysql"],
+    ["dask", "datafusion", "impala", "mssql", "pandas", "polars", "mysql", "singlestoredb"],
     raises=com.OperationNotDefinedError,
 )
 @pytest.mark.notimpl(

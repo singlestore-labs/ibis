@@ -57,6 +57,7 @@ REDIRECTS = {
     "/backends/Polars/": "/backends/polars/",
     "/backends/PostgreSQL/": "/backends/postgresql/",
     "/backends/PySpark/": "/backends/pyspark/",
+    "/backends/SingleStoreDB/": "/backends/singlestoredb/",
     "/backends/SQLite/": "/backends/sqlite/",
     "/backends/Snowflake/": "/backends/snowflake/",
     "/backends/Trino/": "/backends/trino/",

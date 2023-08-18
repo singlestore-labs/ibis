@@ -25,6 +25,9 @@ pytestmark = [
             lambda t: t.js["a"].name("res"),
             pd.Series([[1, 2, 3, 4], None, "foo"] + [None] * 3, name="res"),
             id="object",
+            marks=[
+                pytest.mark.notimpl(["singlestoredb"], raises=TypeError),
+            ],
         ),
         param(
             lambda t: t.js[1].name("res"),
@@ -38,10 +41,10 @@ pytestmark = [
     condition=vparse(sqlite3.sqlite_version) < vparse("3.38.0"),
     reason="JSON not supported in SQLite < 3.38.0",
 )
-def test_json_getitem(json_t, expr_fn, expected):
+def test_json_getitem(backend, json_t, expr_fn, expected):
     expr = expr_fn(json_t)
     result = expr.execute()
-    tm.assert_series_equal(result, expected)
+    backend.assert_series_equal(result, expected)
 
 
 @pytest.mark.notimpl(["dask", "mysql", "pandas"])
@@ -51,7 +54,8 @@ def test_json_getitem(json_t, expr_fn, expected):
     ["pyspark", "trino"], reason="should work but doesn't deserialize JSON"
 )
 @pytest.mark.notimpl(["duckdb"], raises=OperationNotDefinedError)
-def test_json_map(json_t):
+@pytest.mark.notimpl(["singlestoredb"], raises=TypeError)
+def test_json_map(backend, json_t):
     expr = json_t.js.map.name("res")
     result = expr.execute()
     expected = pd.Series(
@@ -66,7 +70,7 @@ def test_json_map(json_t):
         dtype="object",
         name="res",
     )
-    tm.assert_series_equal(result, expected)
+    backend.assert_series_equal(result, expected)
 
 
 @pytest.mark.notimpl(["dask", "mysql", "pandas"])
@@ -76,10 +80,10 @@ def test_json_map(json_t):
 )
 @pytest.mark.notyet(["bigquery"], reason="doesn't allow null in arrays")
 @pytest.mark.notimpl(["duckdb"], raises=OperationNotDefinedError)
-def test_json_array(json_t):
+def test_json_array(backend, json_t):
     expr = json_t.js.array.name("res")
     result = expr.execute()
     expected = pd.Series(
         [None, None, None, None, [42, 47, 55], []], name="res", dtype="object"
     )
-    tm.assert_series_equal(result, expected)
+    backend.assert_series_equal(result, expected)

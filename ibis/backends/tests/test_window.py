@@ -113,6 +113,7 @@ def calc_zscore(s):
                 pytest.mark.notimpl(["pyspark"], raises=com.UnsupportedOperationError),
                 pytest.mark.notyet(["clickhouse"], raises=com.OperationNotDefinedError),
                 pytest.mark.notimpl(["dask"], raises=NotImplementedError),
+                pytest.mark.notimpl(["singlestoredb"], raises=sa.exc.OperationalError),
             ],
         ),
         param(
@@ -338,6 +339,7 @@ def test_grouped_bounded_expanding_window(
                         "mysql",
                         "oracle",
                         "postgres",
+                        "singlestoredb",
                         "sqlite",
                         "snowflake",
                         "trino",
@@ -490,6 +492,7 @@ def test_grouped_bounded_preceding_window(backend, alltypes, df, window_fn):
                         "mysql",
                         "oracle",
                         "postgres",
+                        "singlestoredb",
                         "sqlite",
                         "snowflake",
                         "trino",
@@ -630,6 +633,7 @@ def test_simple_ungrouped_window_with_scalar_order_by(backend, alltypes):
                         "mysql",
                         "oracle",
                         "postgres",
+                        "singlestoredb",
                         "sqlite",
                         "snowflake",
                         "trino",
@@ -660,6 +664,7 @@ def test_simple_ungrouped_window_with_scalar_order_by(backend, alltypes):
                         "mysql",
                         "oracle",
                         "postgres",
+                        "singlestoredb",
                         "sqlite",
                         "snowflake",
                         "trino",
@@ -686,7 +691,7 @@ def test_simple_ungrouped_window_with_scalar_order_by(backend, alltypes):
                     reason="this isn't actually broken: the backend result is equal up to ordering",
                     raises=AssertionError,
                 ),
-                pytest.mark.broken(["oracle"], raises=AssertionError),
+                pytest.mark.broken(["oracle", "singlestoredb"], raises=AssertionError),
                 pytest.mark.notimpl(
                     ["pyspark"],
                     raises=AnalysisException,
@@ -723,7 +728,7 @@ def test_simple_ungrouped_window_with_scalar_order_by(backend, alltypes):
                     ),
                     raises=AssertionError,
                 ),
-                pytest.mark.broken(["oracle"], raises=AssertionError),
+                pytest.mark.broken(["oracle", "singlestoredb"], raises=AssertionError),
                 pytest.mark.notimpl(
                     ["pyspark"],
                     raises=AnalysisException,
@@ -754,6 +759,7 @@ def test_simple_ungrouped_window_with_scalar_order_by(backend, alltypes):
                         "oracle",
                         "postgres",
                         "pyspark",
+                        "singlestoredb",
                         "sqlite",
                         "snowflake",
                         "trino",
@@ -788,6 +794,7 @@ def test_simple_ungrouped_window_with_scalar_order_by(backend, alltypes):
                     "oracle",
                     "postgres",
                     "pyspark",
+                    "singlestoredb",
                     "sqlite",
                     "snowflake",
                     "trino",
@@ -843,6 +850,11 @@ def test_ungrouped_unbounded_window(
 @pytest.mark.notyet(
     ["mssql"],
     reason="RANGE is only supported with UNBOUNDED and CURRENT ROW window frame delimiters",
+    raises=sa.exc.OperationalError,
+)
+@pytest.mark.notyet(
+    ["singlestoredb"],
+    reason="RANGE PRECEDING without UNBOUNDED is not allowed.",
     raises=sa.exc.OperationalError,
 )
 def test_grouped_bounded_range_window(backend, alltypes, df):

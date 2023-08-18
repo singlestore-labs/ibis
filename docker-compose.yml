@@ -126,6 +126,29 @@ services:
       - mysql:/data
       - $PWD/docker/mysql:/docker-entrypoint-initdb.d:ro
 
+  singlestoredb:
+    environment:
+      SINGLESTOREDB_ALLOW_EMPTY_PASSWORD: "true"
+      SINGLESTOREDB_DATABASE: ibis_testing
+      SINGLESTOREDB_PASSWORD: ibis
+      SINGLESTOREDB_USER: ibis
+      SINGLESTORE_LICENSE: BDJmNGIyZDI2YjIwOTRhNjc5YjY5OWU3MDFkZmU1NWE1AAAAAAAAAAAEAAAAAAAAAAwwNQIZAIof/bguZkDHieF/ofwjKQhowvCWvI632QIYTgUc/s6FJ0PGNOjz8tw5ptvkKCjWkNtBAA==
+      ROOT_PASSWORD: root
+    healthcheck:
+      interval: 1s
+      retries: 30
+      test:
+        - CMD-SHELL
+        - ps ax | grep -v grep | grep -q memsqld_safe
+      timeout: 5s
+    image: ghcr.io/singlestore-labs/singlestoredb-dev:latest
+    ports:
+      - 8306:3306
+    networks:
+      - singlestoredb
+    volumes:
+      - singlestoredb:/data
+
   postgres:
     user: postgres
     environment:
@@ -439,6 +462,7 @@ networks:
   mssql:
   clickhouse:
   postgres:
+  singlestoredb:
   trino:
   druid:
   oracle:
@@ -457,4 +481,5 @@ volumes:
   mysql:
   oracle:
   postgres:
+  singlestoredb:
   trino-postgres:
