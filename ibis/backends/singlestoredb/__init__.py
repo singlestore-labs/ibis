@@ -27,7 +27,6 @@ from ibis.backends import (
     PyArrowExampleLoader,
     SupportsTempTables,
 )
-from ibis.backends.singlestoredb import functions
 from ibis.backends.sql import SQLBackend
 from ibis.backends.sql.compilers._compat import Drop
 from ibis.backends.sql.compilers.singlestoredb import compiler
@@ -459,30 +458,31 @@ class Backend(
 
         return sch.Schema(fields)
 
-    @property
-    def function(self) -> functions.Functions:
-        """Accessor for SingleStoreDB functions, e.g. `con.function.dot_product`.
+    def function(self, name: str, *, database: str | None = None) -> Callable:
+        """Return a callable for a user-defined function or aggregate.
 
-        Attributes and calls return a callable that builds an Ibis
-        expression. Names can be builtin vector or JSON functions that have
-        no Ibis method, such as `dot_product` or `json_get_type`, or
-        user-defined functions and aggregates. Call the accessor for
-        functions in another database, e.g.
-        `con.function("my_add", database="db")`.
+        The function's signature is looked up on the server, so assign the
+        result to reuse it. For SingleStoreDB's builtin vector and JSON
+        functions, use `ibis.backends.singlestoredb.functions`; for other
+        builtins, declare a builtin UDF with `@ibis.udf.scalar.builtin`.
 
-        Each attribute access or call of a user-defined function looks up
-        its signature, so assign the result to reuse it.
+        Parameters
+        ----------
+        name
+            The function name, which is case-insensitive.
+        database
+            The function's database. Defaults to the current database.
+
+        Returns
+        -------
+        Callable
+            A function that returns an Ibis expression.
 
         Examples
         --------
-        >>> t.select(score=con.function.dot_product(t.embedding, [0.1, 0.2]))  # doctest: +SKIP
-        >>> my_add = con.function.my_add  # doctest: +SKIP
+        >>> my_add = con.function("my_add")  # doctest: +SKIP
         >>> t.select(total=my_add(t.x, t.y))  # doctest: +SKIP
         """
-        return functions.Functions(self)
-
-    def _udf(self, name: str, *, database: str | None = None) -> Callable:
-        """Return a callable for a user-defined function or aggregate."""
         schema = sge.convert(database or self.current_database)
         key = sge.convert(name.lower())
         info = "information_schema"
@@ -510,7 +510,14 @@ class Backend(
                 aggregate = cur.fetchone()
                 if aggregate is None:
                     name = f"{database}.{name}" if database else name
-                    raise com.MissingUDFError(name)
+                    error = com.MissingUDFError(name)
+                    if hasattr(error, "add_note"):
+                        error.add_note(
+                            "For builtin functions, see "
+                            "ibis.backends.singlestoredb.functions or "
+                            "@ibis.udf.scalar.builtin"
+                        )
+                    raise error
                 return_type, parameters_of, nargs = aggregate
             else:
                 routine_type, return_type = routine
