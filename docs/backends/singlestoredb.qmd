@@ -126,24 +126,25 @@ methods, `length`, indexing and `contains`, through the JSON functions.
 ## SingleStoreDB vector and JSON functions
 
 `ibis.backends.singlestoredb.functions` has SingleStoreDB's vector and JSON
-functions that have no Ibis method. They build expressions and don't need a
-connection:
+functions that have no Ibis method, in its `vector` and `json` modules. They
+build expressions and don't need a connection:
 
 ```python
 from ibis.backends.singlestoredb import functions as s2
 
 t.select(
-    score=s2.dot_product(t.embedding, [0.1, 0.2, 0.3]),
-    kind=s2.json_get_type(t.metadata["tags"]),
-    city=s2.json_extract_string(t.metadata, "address", "city"),
-    has_big_score=s2.json_match_any(
+    score=s2.vector.dot_product(t.embedding, [0.1, 0.2, 0.3]),
+    kind=s2.json.get_type(t.metadata["tags"]),
+    city=s2.json.extract_string(t.metadata, "address", "city"),
+    has_big_score=s2.json.match_any(
         lambda v: v > 90, t.metadata, "scores", value_type="bigint"
     ),
 )
 ```
 
-The vector functions are also in `functions.vector` and the JSON functions
-in `functions.json`.
+Each function's documentation names the SQL function it calls, such as
+`JSON_EXTRACT_STRING` for `json.extract_string`. Import the package as shown
+rather than `from ... import json`, which would hide Python's `json` module.
 
 Vector arguments can be `VECTOR` columns, JSON arrays, Python sequences, or
 `BLOB` columns of packed vectors. The element type comes from a `VECTOR`
@@ -151,11 +152,12 @@ argument or the element type of an array, so you don't need to pass it,
 except for packed `BLOB` vectors whose elements aren't 32-bit floats:
 
 ```python
-s2.dot_product(t.packed_i8, [1, 2, 3], element_type="i8")
+s2.vector.dot_product(t.packed_i8, [1, 2, 3], element_type="i8")
 ```
 
 Functions that return a vector return a `VECTOR` if any argument is one, and
-a packed `BLOB` otherwise.
+a packed `BLOB` otherwise. `vector.from_json` packs a JSON array into a
+`BLOB` vector, and `vector.to_json` unpacks one into a JSON array.
 
 ## User-defined functions
 

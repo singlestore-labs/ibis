@@ -78,7 +78,7 @@ def _scalar(con, t, expr):
 def _as_list(con, t, expr):
     """Execute a vector-valued expression and return a list of numbers."""
     if expr.type().is_binary():
-        expr = s2.json_array_unpack(expr)
+        expr = s2.vector.to_json(expr)
     return [float(x) for x in _scalar(con, t, expr)]
 
 
@@ -96,18 +96,18 @@ def _is_http(con):
     ],
 )
 def test_dot_product_literal(con, vectors, other):
-    assert _scalar(con, vectors, s2.dot_product(vectors.a, other)) == 17.0
+    assert _scalar(con, vectors, s2.vector.dot_product(vectors.a, other)) == 17.0
 
 
 def test_vector_scalars(con, vectors):
     a, b = vectors.a, vectors.b
-    expr = s2.dot_product(a, b)
+    expr = s2.vector.dot_product(a, b)
     assert expr.type() == dt.float64
     assert _scalar(con, vectors, expr) == 32.0
-    assert _scalar(con, vectors, s2.euclidean_distance(a, [1, 2, 4])) == 1.0
-    assert _scalar(con, vectors, s2.vector_num_elements(a)) == 3
-    assert _scalar(con, vectors, s2.vector_elements_sum(a)) == 6.0
-    kth = s2.vector_kth_element(a, 1)
+    assert _scalar(con, vectors, s2.vector.euclidean_distance(a, [1, 2, 4])) == 1.0
+    assert _scalar(con, vectors, s2.vector.num_elements(a)) == 3
+    assert _scalar(con, vectors, s2.vector.elements_sum(a)) == 6.0
+    kth = s2.vector.kth_element(a, 1)
     assert kth.type() == dt.float32
     assert _scalar(con, vectors, kth) == 2.0
 
@@ -115,12 +115,12 @@ def test_vector_scalars(con, vectors):
 @pytest.mark.parametrize(
     ("make_expr", "expected"),
     [
-        param(lambda t: s2.vector_add(t.a, t.b), [5, 7, 9], id="add"),
-        param(lambda t: s2.vector_sub(t.a, [1, 1, 1]), [0, 1, 2], id="sub"),
-        param(lambda t: s2.vector_mul(t.a, t.b), [4, 10, 18], id="mul"),
-        param(lambda t: s2.scalar_vector_mul(2, t.a), [2, 4, 6], id="scalar_mul"),
-        param(lambda t: s2.vector_sort(t.b), [4, 5, 6], id="sort"),
-        param(lambda t: s2.vector_sort(t.b, "desc"), [6, 5, 4], id="sort_desc"),
+        param(lambda t: s2.vector.add(t.a, t.b), [5, 7, 9], id="add"),
+        param(lambda t: s2.vector.sub(t.a, [1, 1, 1]), [0, 1, 2], id="sub"),
+        param(lambda t: s2.vector.mul(t.a, t.b), [4, 10, 18], id="mul"),
+        param(lambda t: s2.vector.scalar_mul(2, t.a), [2, 4, 6], id="scalar_mul"),
+        param(lambda t: s2.vector.sort(t.b), [4, 5, 6], id="sort"),
+        param(lambda t: s2.vector.sort(t.b, "desc"), [6, 5, 4], id="sort_desc"),
     ],
 )
 def test_vector_valued(con, vectors, make_expr, expected):
@@ -133,8 +133,8 @@ def test_vector_valued(con, vectors, make_expr, expected):
 
 
 def test_mixed_vector_kinds_give_vector(con, native_vectors):
-    packed = s2.json_array_pack("[1, 1, 1]")
-    expr = s2.vector_add(packed, native_vectors.a)
+    packed = s2.vector.from_json("[1, 1, 1]")
+    expr = s2.vector.add(packed, native_vectors.a)
     assert expr.type() == native_vectors.a.type()
     if not _is_http(con):
         assert _as_list(con, native_vectors, expr) == [2, 3, 4]
@@ -143,29 +143,29 @@ def test_mixed_vector_kinds_give_vector(con, native_vectors):
 def test_vector_sum(con, vectors):
     if vectors.a.type().is_array() and _is_http(con):
         pytest.xfail("the HTTP driver returns VECTOR values as raw bytes")
-    expr = vectors.group_by("g").aggregate(r=s2.vector_sum(vectors.a)).r
+    expr = vectors.group_by("g").aggregate(r=s2.vector.sum(vectors.a)).r
     if expr.type().is_binary():
-        expr = s2.json_array_unpack(expr)
+        expr = s2.vector.to_json(expr)
     [value] = con.execute(expr)
     assert [float(x) for x in value] == [1, 2, 3]
 
 
 def test_vector_subvector(con, blob_vectors):
-    expr = s2.vector_subvector(blob_vectors.a, 1, 2)
+    expr = s2.vector.subvector(blob_vectors.a, 1, 2)
     assert _as_list(con, blob_vectors, expr) == [2, 3]
 
 
 def test_blob_element_type(con, blob_vectors):
     # packed vectors don't record their element type
-    left = s2.json_array_pack("[1, 2]", element_type="i8")
-    expr = s2.dot_product(left, [1, 2], element_type="i8")
+    left = s2.vector.from_json("[1, 2]", element_type="i8")
+    expr = s2.vector.dot_product(left, [1, 2], element_type="i8")
     assert expr.type() == dt.int64
     assert _scalar(con, blob_vectors, expr) == 5
-    kth = s2.vector_kth_element(left, 1, element_type="i8")
+    kth = s2.vector.kth_element(left, 1, element_type="i8")
     assert kth.type() == dt.int8
     assert _scalar(con, blob_vectors, kth) == 2
-    packed = s2.json_array_pack("[1.5, 2.5]", element_type="f64")
-    unpacked = s2.json_array_unpack(packed, element_type="f64")
+    packed = s2.vector.from_json("[1.5, 2.5]", element_type="f64")
+    unpacked = s2.vector.to_json(packed, element_type="f64")
     assert _scalar(con, blob_vectors, unpacked) == [1.5, 2.5]
 
 
@@ -185,25 +185,25 @@ def test_element_type_from_vector(con, int_vectors):
     t = int_vectors
     # Python sequences and JSON arrays are converted to the VECTOR's type
     for other in ([1, 1, 1], t.j.array):
-        expr = s2.dot_product(t.v, other)
+        expr = s2.vector.dot_product(t.v, other)
         assert expr.type() == dt.int64
         assert _scalar(con, t, expr) == 6
-    assert s2.vector_kth_element(t.v, 0).type() == dt.int8
-    assert "DOT_PRODUCT(" in ibis.to_sql(s2.dot_product(t.v, [1, 1, 1]))
+    assert s2.vector.kth_element(t.v, 0).type() == dt.int8
+    assert "DOT_PRODUCT(" in ibis.to_sql(s2.vector.dot_product(t.v, [1, 1, 1]))
 
 
 def test_element_type_from_json_arrays(con, int_vectors):
     t = int_vectors
     # without a VECTOR, JSON arrays are packed as 32-bit floats
-    expr = s2.dot_product(t.j.array, [1, 2, 3])
+    expr = s2.vector.dot_product(t.j.array, [1, 2, 3])
     assert expr.type() == dt.float64
     assert _scalar(con, t, expr) == 6.0
-    assert _scalar(con, t, s2.vector_elements_sum(t.j.array)) == 3.0
+    assert _scalar(con, t, s2.vector.elements_sum(t.j.array)) == 3.0
 
 
 def test_element_type_from_array_type():
     t = ibis.table({"a": "array<int8>"}, name="t")
-    expr = s2.dot_product(t.a, [1, 2])
+    expr = s2.vector.dot_product(t.a, [1, 2])
     assert expr.type() == dt.int64
     sql = ibis.to_sql(expr, dialect="singlestoredb")
     assert "DOT_PRODUCT_I8(JSON_ARRAY_PACK_I8(`t0`.`a`), JSON_ARRAY_PACK_I8(" in sql
@@ -213,18 +213,20 @@ def test_element_type_from_array_type():
     ("make_expr", "exception", "match"),
     [
         param(
-            lambda t: s2.dot_product(t.v, [1, 1, 1], element_type="f32"),
+            lambda t: s2.vector.dot_product(t.v, [1, 1, 1], element_type="f32"),
             ValueError,
             "doesn't match",
             id="mismatch",
         ),
         param(
-            lambda t: s2.dot_product(t.v, t.v, element_type="u8"),
+            lambda t: s2.vector.dot_product(t.v, t.v, element_type="u8"),
             ValueError,
             "must be one of",
             id="unknown",
         ),
-        param(lambda t: s2.json_array_pack(t.v), TypeError, "VECTOR", id="pack_vector"),
+        param(
+            lambda t: s2.vector.from_json(t.v), TypeError, "VECTOR", id="pack_vector"
+        ),
     ],
 )
 def test_element_type_errors(make_expr, exception, match):
@@ -236,23 +238,23 @@ def test_element_type_errors(make_expr, exception, match):
 def test_mismatched_vectors_raise(con, int_vectors):
     t = int_vectors
     with pytest.raises(Exception, match="incompatib"):
-        _scalar(con, t, s2.dot_product(t.v, t.f))
+        _scalar(con, t, s2.vector.dot_product(t.v, t.f))
 
 
 @pytest.mark.parametrize(
     ("fn", "args", "expected"),
     [
-        param(s2.json_get_type, (), "object", id="get_type"),
-        param(s2.json_extract_string, ("name",), "Widget", id="extract_string"),
-        param(s2.json_extract_string, ("price",), "9.5", id="extract_string_coerces"),
-        param(s2.json_extract_string, ("address", "city"), "Boston", id="extract_path"),
-        param(s2.json_extract_double, ("price",), 9.5, id="extract_double"),
-        param(s2.json_extract_bigint, ("price",), 10, id="extract_bigint_rounds"),
-        param(s2.json_extract_bigint, ("name",), 0, id="extract_bigint_coerces"),
-        param(s2.json_length, (), 4, id="length"),
-        param(s2.json_match_any_exists, ("address", "zip"), True, id="exists"),
-        param(s2.json_match_any_exists, ("address", "x"), False, id="not_exists"),
-        param(s2.json_pretty, (), None, id="pretty"),
+        param(s2.json.get_type, (), "object", id="get_type"),
+        param(s2.json.extract_string, ("name",), "Widget", id="extract_string"),
+        param(s2.json.extract_string, ("price",), "9.5", id="extract_string_coerces"),
+        param(s2.json.extract_string, ("address", "city"), "Boston", id="extract_path"),
+        param(s2.json.extract_double, ("price",), 9.5, id="extract_double"),
+        param(s2.json.extract_bigint, ("price",), 10, id="extract_bigint_rounds"),
+        param(s2.json.extract_bigint, ("name",), 0, id="extract_bigint_coerces"),
+        param(s2.json.length, (), 4, id="length"),
+        param(s2.json.match_any_exists, ("address", "zip"), True, id="exists"),
+        param(s2.json.match_any_exists, ("address", "x"), False, id="not_exists"),
+        param(s2.json.pretty, (), None, id="pretty"),
     ],
 )
 def test_json_scalars(con, docs, fn, args, expected):
@@ -267,97 +269,97 @@ def test_json_scalars(con, docs, fn, args, expected):
     ("make_expr", "expected"),
     [
         param(
-            lambda d: s2.json_extract_json(d, "address"),
+            lambda d: s2.json.extract_json(d, "address"),
             {"city": "Boston", "zip": "02101"},
             id="extract_json",
         ),
-        param(lambda d: s2.json_keys(d, "address"), ["city", "zip"], id="keys_path"),
+        param(lambda d: s2.json.keys(d, "address"), ["city", "zip"], id="keys_path"),
         param(
-            lambda d: s2.json_delete_key(d, "address", "zip")["address"],
+            lambda d: s2.json.delete_key(d, "address", "zip")["address"],
             {"city": "Boston"},
             id="delete_key_path",
         ),
         param(
-            lambda d: s2.json_set_string(d, "name", "Gadget")["name"],
+            lambda d: s2.json.set_string(d, "name", "Gadget")["name"],
             "Gadget",
             id="set_string",
         ),
         param(
-            lambda d: s2.json_set_string(d, "address", "city", "Cambridge")["address"][
+            lambda d: s2.json.set_string(d, "address", "city", "Cambridge")["address"][
                 "city"
             ],
             "Cambridge",
             id="set_string_path",
         ),
         param(
-            lambda d: s2.json_set_double(d, "price", 1.25)["price"],
+            lambda d: s2.json.set_double(d, "price", 1.25)["price"],
             1.25,
             id="set_double",
         ),
         param(
-            lambda d: s2.json_set_json(d, "tags", '["c"]')["tags"], ["c"], id="set_json"
+            lambda d: s2.json.set_json(d, "tags", '["c"]')["tags"], ["c"], id="set_json"
         ),
         param(
-            lambda d: s2.json_array_push_string(d["tags"], "c"),
+            lambda d: s2.json.array_push_string(d["tags"], "c"),
             ["a", "b", "c"],
             id="push_string",
         ),
         param(
-            lambda d: s2.json_array_push_double(d["tags"], 1.5),
+            lambda d: s2.json.array_push_double(d["tags"], 1.5),
             ["a", "b", 1.5],
             id="push_double",
         ),
         param(
-            lambda d: s2.json_array_push_json(d["tags"], '{"x": 1}'),
+            lambda d: s2.json.array_push_json(d["tags"], '{"x": 1}'),
             ["a", "b", {"x": 1}],
             id="push_json",
         ),
         param(
-            lambda d: s2.json_splice_string(d["tags"], 0, 1, "z"),
+            lambda d: s2.json.splice_string(d["tags"], 0, 1, "z"),
             ["z", "b"],
             id="splice_string",
         ),
         param(
-            lambda d: s2.json_splice_double(d["tags"], 1, 1, 7, 8),
+            lambda d: s2.json.splice_double(d["tags"], 1, 1, 7, 8),
             ["a", 7, 8],
             id="splice_double",
         ),
         param(
-            lambda d: s2.json_splice_json(d["tags"], 2, 0, "[1]"),
+            lambda d: s2.json.splice_json(d["tags"], 2, 0, "[1]"),
             ["a", "b", [1]],
             id="splice_json",
         ),
         param(
-            lambda d: s2.json_include_mask(d, '{"name": 1}'),
+            lambda d: s2.json.include_mask(d, '{"name": 1}'),
             {"name": "Widget"},
             id="include_mask",
         ),
         param(
-            lambda d: s2.json_exclude_mask(d, '{"address": 1, "tags": 1}'),
+            lambda d: s2.json.exclude_mask(d, '{"address": 1, "tags": 1}'),
             {"name": "Widget", "price": 9.5},
             id="exclude_mask",
         ),
         param(
-            lambda d: s2.json_merge_patch(d["address"], '{"zip": null, "st": "MA"}'),
+            lambda d: s2.json.merge_patch(d["address"], '{"zip": null, "st": "MA"}'),
             {"city": "Boston", "st": "MA"},
             id="merge_patch",
         ),
         param(
-            lambda d: s2.json_build_array(1, "a", d["price"]),
+            lambda d: s2.json.build_array(1, "a", d["price"]),
             [1, "a", 9.5],
             id="build_array",
         ),
         param(
-            lambda d: s2.json_build_object({"n": d["name"], "k": 1}),
+            lambda d: s2.json.build_object({"n": d["name"], "k": 1}),
             {"n": "Widget", "k": 1},
             id="build_object_mapping",
         ),
         param(
-            lambda d: s2.json_build_object("n", d["name"], "k", 1),
+            lambda d: s2.json.build_object("n", d["name"], "k", 1),
             {"n": "Widget", "k": 1},
             id="build_object_pairs",
         ),
-        param(lambda d: s2.to_json(d["price"]), 9.5, id="to_json"),
+        param(lambda d: s2.json.from_value(d["price"]), 9.5, id="from_value"),
     ],
 )
 def test_json_valued(con, docs, make_expr, expected):
@@ -369,18 +371,18 @@ def test_json_valued(con, docs, make_expr, expected):
 @pytest.mark.parametrize(
     "fn",
     [
-        s2.json_array_contains_string,
-        s2.json_array_contains_double,
-        s2.json_array_contains_json,
+        s2.json.array_contains_string,
+        s2.json.array_contains_double,
+        s2.json.array_contains_json,
     ],
 )
 def test_json_array_contains(con, docs, fn):
     found, missing = {
-        s2.json_array_contains_string: ("a", "z"),
-        s2.json_array_contains_double: (1.5, 2.5),
-        s2.json_array_contains_json: ('"a"', '"z"'),
+        s2.json.array_contains_string: ("a", "z"),
+        s2.json.array_contains_double: (1.5, 2.5),
+        s2.json.array_contains_json: ('"a"', '"z"'),
     }[fn]
-    array = s2.json_array_push_double(docs.doc["tags"], 1.5)
+    array = s2.json.array_push_double(docs.doc["tags"], 1.5)
     assert _scalar(con, docs, fn(array, found)) is True
     assert _scalar(con, docs, fn(array, missing)) is False
 
@@ -404,45 +406,47 @@ def _column(con, t, expr):
 
 def test_json_match_any(con, scores):
     d = scores.doc
-    even = s2.json_match_any(lambda v: v % 2 == 0, d, "s", value_type="bigint")
+    even = s2.json.match_any(lambda v: v % 2 == 0, d, "s", value_type="bigint")
     assert _column(con, scores, even) == [False, True]
-    big = s2.json_match_any(lambda v: v > 4, d, "s", value_type="double")
+    big = s2.json.match_any(lambda v: v > 4, d, "s", value_type="double")
     assert _column(con, scores, big) == [True, False]
-    named = s2.json_match_any(lambda v: v == "b", d, "n", value_type="string")
+    named = s2.json.match_any(lambda v: v == "b", d, "n", value_type="string")
     assert _column(con, scores, named) == [True, False]
     with pytest.raises(ValueError, match="value_type"):
-        s2.json_match_any(lambda v: v, d, "s", value_type="int")
+        s2.json.match_any(lambda v: v, d, "s", value_type="int")
 
 
 def test_json_agg(con, scores):
-    [result] = con.execute(scores.aggregate(r=s2.json_agg(scores.id)).r)
+    [result] = con.execute(scores.aggregate(r=s2.json.agg(scores.id)).r)
     assert sorted(result) == [1, 2]
     [result] = con.execute(
-        scores.filter(scores.id > 1).aggregate(r=s2.json_agg(scores.doc["s"])).r
+        scores.filter(scores.id > 1).aggregate(r=s2.json.agg(scores.doc["s"])).r
     )
     assert result == [[2]]
 
 
 def test_reduce(con, scores):
     d = scores.doc
-    total = s2.reduce(0, d["s"], lambda acc, v: acc + v, value_type="bigint")
+    total = s2.json.reduce(0, d["s"], lambda acc, v: acc + v, value_type="bigint")
     assert total.type().is_integer()
     assert _column(con, scores, total) == [15, 2]
-    joined = s2.reduce("", d["n"], lambda acc, v: acc.concat(v), value_type="string")
+    joined = s2.json.reduce(
+        "", d["n"], lambda acc, v: acc.concat(v), value_type="string"
+    )
     assert _column(con, scores, joined) == ["ab", ""]
-    indexes = s2.reduce(0, d["s"], lambda acc, _, i: acc + i)
+    indexes = s2.json.reduce(0, d["s"], lambda acc, _, i: acc + i)
     assert _column(con, scores, indexes) == [3, 0]
 
 
 @pytest.mark.parametrize(
     ("make_expr", "match"),
     [
-        param(s2.json_build_object, "alternating", id="build_object"),
-        param(lambda d: s2.json_set_string(d, "a"), "at least one key", id="set"),
-        param(s2.json_delete_key, "at least one key", id="delete"),
-        param(lambda d: s2.json_extract_string(d, 1.5), "keys must be", id="key_type"),
+        param(s2.json.build_object, "alternating", id="build_object"),
+        param(lambda d: s2.json.set_string(d, "a"), "at least one key", id="set"),
+        param(s2.json.delete_key, "at least one key", id="delete"),
+        param(lambda d: s2.json.extract_string(d, 1.5), "keys must be", id="key_type"),
         param(
-            lambda d: s2.reduce(0, d, lambda a, _: a, value_type="x"),
+            lambda d: s2.json.reduce(0, d, lambda a, _: a, value_type="x"),
             "value_type",
             id="reduce",
         ),
@@ -457,7 +461,7 @@ def test_json_argument_errors(make_expr, match):
 def test_functions_compile_unquoted():
     t = ibis.table({"v": "array<float32, 3>", "doc": "json"}, name="t")
     expr = t.select(
-        a=s2.vector_sort(t.v, "desc"), b=s2.json_extract_string(t.doc, "a", "b")
+        a=s2.vector.sort(t.v, "desc"), b=s2.json.extract_string(t.doc, "a", "b")
     )
     sql = ibis.to_sql(expr, dialect="singlestoredb")
     assert "VECTOR_SORT(`t0`.`v`, 'desc')" in sql
@@ -465,9 +469,14 @@ def test_functions_compile_unquoted():
 
 
 def test_submodules():
-    assert s2.dot_product is s2.vector.dot_product
-    assert s2.json_keys is s2.json.json_keys
-    assert set(s2.__all__) == {"json", "vector", *s2.json.__all__, *s2.vector.__all__}
+    # functions are only available from their module
+    assert s2.__all__ == ["json", "vector"]
+    assert not hasattr(s2, "dot_product")
+    for module in (s2.json, s2.vector):
+        assert all(callable(getattr(module, name)) for name in module.__all__)
+        assert not any(name.startswith(("json_", "vector_")) for name in module.__all__)
+        for name in module.__all__:
+            assert "Calls `" in getattr(module, name).__doc__
 
 
 @ibis.udf.scalar.builtin(name="HEX")

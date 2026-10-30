@@ -26,20 +26,20 @@ import ibis.expr.types as ir
 from ibis.backends.singlestoredb.functions._core import aggregate, call
 
 __all__ = [
+    "add",
     "dot_product",
+    "elements_sum",
     "euclidean_distance",
-    "json_array_pack",
-    "json_array_unpack",
-    "scalar_vector_mul",
-    "vector_add",
-    "vector_elements_sum",
-    "vector_kth_element",
-    "vector_mul",
-    "vector_num_elements",
-    "vector_sort",
-    "vector_sub",
-    "vector_subvector",
-    "vector_sum",
+    "from_json",
+    "kth_element",
+    "mul",
+    "num_elements",
+    "scalar_mul",
+    "sort",
+    "sub",
+    "subvector",
+    "sum",
+    "to_json",
 ]
 
 ElementType = Literal["i8", "i16", "i32", "i64", "f32", "f64"]
@@ -136,12 +136,14 @@ def dot_product(
 ) -> ir.NumericValue:
     """Return the dot product of two vectors.
 
+    Calls `DOT_PRODUCT`.
+
     The result is an integer for integer vectors and a float otherwise.
 
     Examples
     --------
     >>> from ibis.backends.singlestoredb import functions as s2
-    >>> t.select(score=s2.dot_product(t.embedding, [0.1, 0.2, 0.3]))  # doctest: +SKIP
+    >>> t.select(score=s2.vector.dot_product(t.embedding, [0.1, 0.2, 0.3]))  # doctest: +SKIP
     """
     v = _Vectors([left, right], element_type)
     return call(v.name("DOT_PRODUCT"), v.accumulator, *v.args)
@@ -150,57 +152,80 @@ def dot_product(
 def euclidean_distance(
     left, right, /, *, element_type: ElementType | None = None
 ) -> ir.FloatingValue:
-    """Return the Euclidean distance between two vectors."""
+    """Return the Euclidean distance between two vectors.
+
+    Calls `EUCLIDEAN_DISTANCE`.
+    """
     v = _Vectors([left, right], element_type)
     return call(v.name("EUCLIDEAN_DISTANCE"), dt.float64, *v.args)
 
 
-def vector_add(left, right, /, *, element_type: ElementType | None = None) -> ir.Value:
-    """Return the element-wise sum of two vectors."""
+def add(left, right, /, *, element_type: ElementType | None = None) -> ir.Value:
+    """Return the element-wise sum of two vectors.
+
+    Calls `VECTOR_ADD`.
+    """
     v = _Vectors([left, right], element_type)
     return call(v.name("VECTOR_ADD"), v.vector, *v.args)
 
 
-def vector_sub(left, right, /, *, element_type: ElementType | None = None) -> ir.Value:
-    """Return the element-wise difference of two vectors."""
+def sub(left, right, /, *, element_type: ElementType | None = None) -> ir.Value:
+    """Return the element-wise difference of two vectors.
+
+    Calls `VECTOR_SUB`.
+    """
     v = _Vectors([left, right], element_type)
     return call(v.name("VECTOR_SUB"), v.vector, *v.args)
 
 
-def vector_mul(left, right, /, *, element_type: ElementType | None = None) -> ir.Value:
-    """Return the element-wise product of two vectors."""
+def mul(left, right, /, *, element_type: ElementType | None = None) -> ir.Value:
+    """Return the element-wise product of two vectors.
+
+    Calls `VECTOR_MUL`.
+    """
     v = _Vectors([left, right], element_type)
     return call(v.name("VECTOR_MUL"), v.vector, *v.args)
 
 
-def scalar_vector_mul(
+def scalar_mul(
     scalar, vector, /, *, element_type: ElementType | None = None
 ) -> ir.Value:
-    """Return a vector with each element multiplied by `scalar`."""
+    """Return a vector with each element multiplied by `scalar`.
+
+    Calls `SCALAR_VECTOR_MUL`.
+    """
     v = _Vectors([vector], element_type)
     return call(v.name("SCALAR_VECTOR_MUL"), v.vector, scalar, *v.args)
 
 
-def vector_num_elements(
+def num_elements(
     vector, /, *, element_type: ElementType | None = None
 ) -> ir.IntegerValue:
-    """Return the number of elements in a vector."""
+    """Return the number of elements in a vector.
+
+    Calls `VECTOR_NUM_ELEMENTS`.
+    """
     v = _Vectors([vector], element_type)
     return call(v.name("VECTOR_NUM_ELEMENTS"), dt.int64, *v.args)
 
 
-def vector_elements_sum(
+def elements_sum(
     vector, /, *, element_type: ElementType | None = None
 ) -> ir.NumericValue:
-    """Return the sum of a vector's elements."""
+    """Return the sum of a vector's elements.
+
+    Calls `VECTOR_ELEMENTS_SUM`.
+    """
     v = _Vectors([vector], element_type)
     return call(v.name("VECTOR_ELEMENTS_SUM"), v.accumulator, *v.args)
 
 
-def vector_kth_element(
+def kth_element(
     vector, k, /, *, element_type: ElementType | None = None
 ) -> ir.NumericValue:
     """Return the element at zero-based position `k` of a vector.
+
+    Calls `VECTOR_KTH_ELEMENT`.
 
     Negative positions count from the end. SingleStoreDB raises an error for
     positions out of range.
@@ -209,50 +234,60 @@ def vector_kth_element(
     return call(v.name("VECTOR_KTH_ELEMENT"), v.element, *v.args, k)
 
 
-def vector_sort(
+def sort(
     vector,
     direction: Literal["asc", "desc"] | None = None,
     /,
     *,
     element_type: ElementType | None = None,
 ) -> ir.Value:
-    """Return a vector with its elements sorted, ascending by default."""
+    """Return a vector with its elements sorted, ascending by default.
+
+    Calls `VECTOR_SORT`.
+    """
     v = _Vectors([vector], element_type)
     args = v.args if direction is None else [*v.args, direction]
     return call(v.name("VECTOR_SORT"), v.vector, *args)
 
 
-def vector_subvector(
+def subvector(
     vector, start, length, /, *, element_type: ElementType | None = None
 ) -> ir.Value:
-    """Return `length` elements of a vector from zero-based position `start`."""
+    """Return `length` elements of a vector from zero-based position `start`.
+
+    Calls `VECTOR_SUBVECTOR`.
+    """
     v = _Vectors([vector], element_type)
     return call(v.name("VECTOR_SUBVECTOR"), v.vector, *v.args, start, length)
 
 
-def vector_sum(
-    vector, /, *, element_type: ElementType | None = None, where=None
-) -> ir.Value:
-    """Aggregate vectors into their element-wise sum."""
+def sum(vector, /, *, element_type: ElementType | None = None, where=None) -> ir.Value:
+    """Aggregate vectors into their element-wise sum.
+
+    Calls `VECTOR_SUM`.
+    """
     v = _Vectors([vector], element_type)
     return aggregate(v.name("VECTOR_SUM"), v.vector, *v.args, where=where)
 
 
-def json_array_pack(array, /, *, element_type: ElementType | None = None) -> ir.Value:
+def from_json(array, /, *, element_type: ElementType | None = None) -> ir.Value:
     """Pack a JSON array of numbers into a `BLOB` vector.
+
+    Calls `JSON_ARRAY_PACK`.
 
     `array` can be a JSON array expression, a JSON array string, or a Python
     sequence. The element type defaults to that of an array expression, or
     to 32-bit floats.
     """
     if _is_vector(array):
-        raise TypeError("json_array_pack takes a JSON array, not a VECTOR")
+        raise TypeError("from_json takes a JSON array, not a VECTOR")
     return _Vectors([array], element_type).args[0]
 
 
-def json_array_unpack(
-    vector, /, *, element_type: ElementType | None = None
-) -> ir.JSONValue:
-    """Unpack a `BLOB` vector into a JSON array of numbers."""
+def to_json(vector, /, *, element_type: ElementType | None = None) -> ir.JSONValue:
+    """Unpack a `BLOB` vector into a JSON array of numbers.
+
+    Calls `JSON_ARRAY_UNPACK`.
+    """
     v = _Vectors([vector], element_type)
     return call(v.name("JSON_ARRAY_UNPACK"), dt.json, *v.args)
