@@ -123,6 +123,67 @@ t.select(
 `VECTOR` columns are read as fixed-length arrays and support the same array
 methods, `length`, indexing and `contains`, through the JSON functions.
 
+## SingleStoreDB SQL functions
+
+`con.function` gives callables for SingleStoreDB functions that have no Ibis
+method, and for your own user-defined functions and aggregates:
+
+```python
+t.select(
+    score=con.function.dot_product(t.embedding, [0.1, 0.2, 0.3]),
+    kind=con.function.json_get_type(t.metadata["tags"]),
+)
+```
+
+`con.function("dot_product")` is the same as `con.function.dot_product`.
+
+The builtins it knows are:
+
+- **Vector functions:** `dot_product`, `euclidean_distance`,
+  `vector_add`, `vector_sub`, `vector_mul`, `scalar_vector_mul`,
+  `vector_num_elements`, `vector_elements_sum`, `vector_kth_element`,
+  `vector_sort`, `vector_subvector`, `json_array_pack`,
+  `json_array_unpack` and the `vector_sum` aggregate.
+  - Vector arguments can be `VECTOR` columns, `BLOB` columns of packed
+    vectors, or Python sequences.
+  - Add a suffix from `_i8` … `_f64`, as in `dot_product_i8`, for `BLOB`
+    vectors whose elements aren't 32-bit floats.
+  - Functions that return a vector return a `VECTOR` if any vector argument
+    is one, and a `BLOB` otherwise.
+- **JSON functions:** `json_get_type`, `json_extract_string`,
+  `json_extract_double`, `json_extract_bigint`, `json_extract_json`,
+  `json_keys`, `json_length`, `json_delete_key`, `json_set_string`,
+  `json_set_double`, `json_set_json`, `json_array_contains_*`,
+  `json_array_push_*`, `json_splice_*`, `json_pretty`,
+  `json_include_mask` and `json_exclude_mask`. Functions that take a key
+  path accept one or more keys, e.g.
+  `json_extract_string(t.metadata, "address", "city")`.
+
+Any other name is looked up as a user-defined function in the current
+database. Each lookup queries the function's signature, so assign the
+callable to reuse it. Call `con.function` for a function in another
+database:
+
+```python
+my_add = con.function.my_add
+my_mul = con.function("my_mul", database="other_db")
+t.select(total=my_add(t.x, t.y), product=my_mul(t.x, t.y))
+```
+
+For other builtins that have no Ibis method, declare a
+[builtin UDF](../how-to/extending/builtin.qmd):
+
+```python
+@ibis.udf.scalar.builtin(name="SIGMOID")
+def sigmoid(x: float) -> float: ...
+
+
+t.select(p=sigmoid(t.score))
+```
+
+Server variables and `SHOW` commands are available through `con.globals`,
+`con.locals`, `con.vars`, and `con.show`, e.g. `con.show.tables()`.
+
 ```{python}
 #| echo: false
 BACKEND = "SingleStoreDB"

@@ -11,6 +11,7 @@ import sqlglot as sg
 from pytest import param
 
 import ibis
+import ibis.common.exceptions as com
 import ibis.expr.datatypes as dt
 from ibis import udf
 from ibis.backends.singlestoredb.tests.conftest import (
@@ -462,3 +463,124 @@ def test_transaction_handling(con):
             assert len(result) == 1
             assert result.iloc[0]["id"] == 1
             assert result.iloc[0]["value"] == "test"
+
+
+def _storage_type(con, table_name):
+    with con.begin() as c:
+        c.execute(
+            "SELECT storage_type FROM information_schema.tables "
+            f"WHERE table_schema = DATABASE() AND table_name = '{table_name}'"
+        )
+        (storage_type,) = c.fetchone()
+    return storage_type
+
+
+@pytest.mark.parametrize(
+    ("storage_type", "expected"),
+    [
+        param("rowstore", "INMEMORY_ROWSTORE", id="rowstore"),
+        param("ROWSTORE", "INMEMORY_ROWSTORE", id="rowstore-upper"),
+        param("columnstore", "COLUMNSTORE", id="columnstore"),
+    ],
+)
+def test_create_table_storage_type(con, storage_type, expected):
+    # use schema= rather than a DataFrame: memtables are temporary tables,
+    # which are unreliable over the HTTP protocol under concurrent load
+    table_name = gen_name("storage_type")
+    con.create_table(
+        table_name, schema=ibis.schema({"x": "int64"}), storage_type=storage_type
+    )
+    try:
+        assert _storage_type(con, table_name) == expected
+    finally:
+        con.drop_table(table_name, force=True)
+
+
+def test_create_table_storage_type_overwrite(con):
+    table_name = gen_name("storage_type")
+    con.create_table(table_name, schema=ibis.schema({"x": "int64"}))
+    try:
+        con.create_table(
+            table_name,
+            schema=ibis.schema({"x": "int64"}),
+            overwrite=True,
+            storage_type="rowstore",
+        )
+        assert _storage_type(con, table_name) == "INMEMORY_ROWSTORE"
+    finally:
+        con.drop_table(table_name, force=True)
+
+
+def test_create_temp_table_rowstore(con):
+    if _is_http_protocol(con):
+        pytest.skip("temporary tables don't persist across HTTP requests")
+    table_name = gen_name("storage_type")
+    t = con.create_table(
+        table_name, pd.DataFrame({"x": [1, 2]}), temp=True, storage_type="rowstore"
+    )
+    assert t.count().execute() == 2
+
+
+def test_create_table_invalid_storage_type(con):
+    with pytest.raises(com.IbisInputError, match="storage_type"):
+        con.create_table(
+            gen_name("storage_type"),
+            schema=ibis.schema({"x": "int64"}),
+            storage_type="reference",
+        )
+
+
+def test_create_table_storage_type_sql():
+    """ROWSTORE must precede TEMPORARY; sqlglot's default order is invalid."""
+    from ibis.backends.singlestoredb import Backend
+
+    con = Backend()
+    sql = []
+
+    class Cursor:
+        def execute(self, stmt):
+            sql.append(stmt)
+
+    @contextlib.contextmanager
+    def begin():
+        yield Cursor()
+
+    con.begin = begin
+    con.create_table(
+        "t", schema=ibis.schema({"x": "int64"}), temp=True, storage_type="rowstore"
+    )
+    assert sql == ["CREATE ROWSTORE TEMPORARY TABLE `t` (`x` BIGINT)"]
+
+
+@pytest.mark.parametrize(
+    "attr",
+    [
+        "globals",
+        "locals",
+        "vars",
+        "cluster_globals",
+        "cluster_locals",
+        "cluster_vars",
+    ],
+)
+def test_variable_accessors(con, attr):
+    accessor = getattr(con, attr)
+    assert accessor is getattr(con.con, attr)
+
+
+def test_variable_accessor_values(con):
+    assert int(con.globals["max_connections"]) > 0
+    assert con.locals["autocommit"] in (True, 1, "ON")
+
+
+def test_show_accessor(con):
+    table_name = gen_name("show")
+    con.create_table(table_name, schema=ibis.schema({"x": "int64"}))
+    try:
+        names = [row["Name"] for row in con.show.tables()]
+        assert table_name in names
+        assert IBIS_TEST_SINGLESTOREDB_DB in [
+            row["Name"] for row in con.show.databases()
+        ]
+    finally:
+        con.drop_table(table_name, force=True)

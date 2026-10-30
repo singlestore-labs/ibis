@@ -5,14 +5,19 @@
 from __future__ import annotations
 
 import contextlib
+import inspect
+import keyword
+import re
 import warnings
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 from urllib.parse import parse_qsl, unquote_plus
 
 import sqlglot as sg
 import sqlglot.expressions as sge
 
+import ibis
 import ibis.common.exceptions as com
+import ibis.expr.datatypes as dt
 import ibis.expr.schema as sch
 import ibis.expr.types as ir
 from ibis import util
@@ -22,12 +27,13 @@ from ibis.backends import (
     PyArrowExampleLoader,
     SupportsTempTables,
 )
+from ibis.backends.singlestoredb import functions
 from ibis.backends.sql import SQLBackend
 from ibis.backends.sql.compilers._compat import Drop
 from ibis.backends.sql.compilers.singlestoredb import compiler
 
 if TYPE_CHECKING:
-    from collections.abc import Generator, Mapping
+    from collections.abc import Callable, Generator, Mapping
     from pathlib import Path
     from urllib.parse import ParseResult
 
@@ -137,6 +143,41 @@ class Backend(
     def con(self):
         """Return the database connection for compatibility with base class."""
         return self._client
+
+    @property
+    def show(self) -> Any:
+        """Accessor for SHOW commands, e.g. `con.show.tables()`."""
+        return self.con.show
+
+    @property
+    def globals(self) -> Any:
+        """Accessor for global server variables."""
+        return self.con.globals
+
+    @property
+    def locals(self) -> Any:
+        """Accessor for session server variables."""
+        return self.con.locals
+
+    @property
+    def cluster_globals(self) -> Any:
+        """Accessor for cluster-wide global server variables."""
+        return self.con.cluster_globals
+
+    @property
+    def cluster_locals(self) -> Any:
+        """Accessor for cluster-wide session server variables."""
+        return self.con.cluster_locals
+
+    @property
+    def vars(self) -> Any:
+        """Accessor for server variables (session, falling back to global)."""
+        return self.con.vars
+
+    @property
+    def cluster_vars(self) -> Any:
+        """Accessor for cluster-wide server variables."""
+        return self.con.cluster_vars
 
     def _get_autocommit(self, con) -> bool:
         """Get autocommit state for both MySQL and HTTP connections.
@@ -418,6 +459,123 @@ class Backend(
 
         return sch.Schema(fields)
 
+    @property
+    def function(self) -> functions.Functions:
+        """Accessor for SingleStoreDB functions, e.g. `con.function.dot_product`.
+
+        Attributes and calls return a callable that builds an Ibis
+        expression. Names can be builtin vector or JSON functions that have
+        no Ibis method, such as `dot_product` or `json_get_type`, or
+        user-defined functions and aggregates. Call the accessor for
+        functions in another database, e.g.
+        `con.function("my_add", database="db")`.
+
+        Each attribute access or call of a user-defined function looks up
+        its signature, so assign the result to reuse it.
+
+        Examples
+        --------
+        >>> t.select(score=con.function.dot_product(t.embedding, [0.1, 0.2]))  # doctest: +SKIP
+        >>> my_add = con.function.my_add  # doctest: +SKIP
+        >>> t.select(total=my_add(t.x, t.y))  # doctest: +SKIP
+        """
+        return functions.Functions(self)
+
+    def _udf(self, name: str, *, database: str | None = None) -> Callable:
+        """Return a callable for a user-defined function or aggregate."""
+        schema = sge.convert(database or self.current_database)
+        key = sge.convert(name.lower())
+        info = "information_schema"
+        with self.begin() as cur:
+            cur.execute(
+                sg.select("ROUTINE_TYPE", "DTD_IDENTIFIER")
+                .from_(sg.table("ROUTINES", db=info))
+                .where(
+                    sg.column("ROUTINE_SCHEMA").eq(schema),
+                    sg.func("LOWER", sg.column("ROUTINE_NAME")).eq(key),
+                )
+                .sql(self.dialect)
+            )
+            routine = cur.fetchone()
+            if routine is None:
+                cur.execute(
+                    sg.select("RETURN_TYPE", "ITERATE_FUNCTION", "NUM_PARAMETERS")
+                    .from_(sg.table("AGGREGATE_FUNCTIONS", db=info))
+                    .where(
+                        sg.column("AGGREGATE_SCHEMA").eq(schema),
+                        sg.func("LOWER", sg.column("AGGREGATE_NAME")).eq(key),
+                    )
+                    .sql(self.dialect)
+                )
+                aggregate = cur.fetchone()
+                if aggregate is None:
+                    name = f"{database}.{name}" if database else name
+                    raise com.MissingUDFError(name)
+                return_type, parameters_of, nargs = aggregate
+            else:
+                routine_type, return_type = routine
+                if routine_type != "FUNCTION":
+                    raise com.UnsupportedOperationError(
+                        f"{name!r} is a stored procedure, not a function"
+                    )
+                if return_type == "TABLE":
+                    raise com.UnsupportedOperationError(
+                        f"{name!r} is a table-valued function; "
+                        f"use con.sql('SELECT * FROM {name}(...)') instead"
+                    )
+                parameters_of = name
+            cur.execute(
+                sg.select("PARAMETER_NAME", "DTD_IDENTIFIER")
+                .from_(sg.table("PARAMETERS", db=info))
+                .where(
+                    sg.column("SPECIFIC_SCHEMA").eq(schema),
+                    sg.func("LOWER", sg.column("SPECIFIC_NAME")).eq(
+                        sge.convert(parameters_of.lower())
+                    ),
+                )
+                .order_by("ORDINAL_POSITION")
+                .sql(self.dialect)
+            )
+            parameters = cur.fetchall()
+
+        if routine is None:
+            # An aggregate's arguments are those of its ITERATE function,
+            # after the state
+            parameters = parameters[1:]
+            if len(parameters) != nargs:
+                parameters = [(None, None)] * nargs
+
+        def fake_func(*args, **kwargs): ...
+
+        fake_func.__name__ = name
+        fake_func.__signature__ = inspect.Signature(
+            [
+                inspect.Parameter(
+                    param
+                    if param and param.isidentifier() and not keyword.iskeyword(param)
+                    else f"arg{i}",
+                    kind=inspect.Parameter.POSITIONAL_OR_KEYWORD,
+                )
+                for i, (param, _) in enumerate(parameters)
+            ]
+        )
+        arg_types = tuple(
+            None if typ is None else self._routine_type(typ) for _, typ in parameters
+        )
+        decorator = ibis.udf.scalar.builtin if routine else ibis.udf.agg.builtin
+        return decorator(
+            fake_func,
+            name=name,
+            database=database,
+            signature=(arg_types, self._routine_type(return_type)),
+        )
+
+    def _routine_type(self, typ: str) -> dt.DataType:
+        # e.g. "text CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NULL"
+        typ = re.sub(r"\s+(CHARACTER SET|COLLATE)\s+\S+", "", typ, flags=re.IGNORECASE)
+        typ = re.sub(r"\s+(NOT\s+)?NULL$", "", typ, flags=re.IGNORECASE)
+        return self.compiler.type_mapper.from_string(typ)
+
     @contextlib.contextmanager
     def begin(self) -> Generator[Any, None, None]:
         """Begin a transaction context for executing SQL commands.
@@ -505,6 +663,7 @@ class Backend(
         database: str | None = None,
         temp: bool = False,
         overwrite: bool = False,
+        storage_type: Literal["columnstore", "rowstore"] | None = None,
     ) -> ir.Table:
         """Create a table in SingleStoreDB.
 
@@ -523,6 +682,11 @@ class Backend(
             Create a temporary table
         overwrite
             Replace the table if it already exists
+        storage_type
+            Table storage type: `"rowstore"` or `"columnstore"`. If None, the
+            server's `default_table_type` is used. `"columnstore"` also uses
+            the server default, because SingleStoreDB has no `COLUMNSTORE`
+            keyword.
 
         Returns
         -------
@@ -544,6 +708,10 @@ class Backend(
         Create temporary table:
 
         >>> temp_table = con.create_table("temp_data", df, temp=True)  # doctest: +SKIP
+
+        Create rowstore table:
+
+        >>> table = con.create_table("scores", df, storage_type="rowstore")  # doctest: +SKIP
         """
         import sqlglot as sg
         import sqlglot.expressions as sge
@@ -558,9 +726,23 @@ class Backend(
         if schema is not None:
             schema = ibis.schema(schema)
 
-        properties = []
+        if storage_type is not None and storage_type.lower() not in (
+            "columnstore",
+            "rowstore",
+        ):
+            raise com.IbisInputError(
+                f"Invalid storage_type {storage_type!r}; "
+                "expected 'columnstore' or 'rowstore'"
+            )
 
-        if temp:
+        properties = []
+        kind = "TABLE"
+
+        if storage_type is not None and storage_type.lower() == "rowstore":
+            # sqlglot renders TemporaryProperty before the kind, but
+            # SingleStoreDB requires ROWSTORE to come first
+            kind = "ROWSTORE TEMPORARY TABLE" if temp else "ROWSTORE TABLE"
+        elif temp:
             properties.append(sge.TemporaryProperty())
 
         if obj is not None:
@@ -596,7 +778,7 @@ class Backend(
         )
 
         create_stmt = sge.Create(
-            kind="TABLE", this=target, properties=sge.Properties(expressions=properties)
+            kind=kind, this=target, properties=sge.Properties(expressions=properties)
         )
 
         this = sg.table(name, catalog=table_database, quoted=quoted)
