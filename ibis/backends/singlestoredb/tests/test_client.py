@@ -14,6 +14,7 @@ import ibis
 import ibis.common.exceptions as com
 import ibis.expr.datatypes as dt
 from ibis import udf
+from ibis.backends.singlestoredb import server
 from ibis.backends.singlestoredb.tests.conftest import (
     IBIS_TEST_SINGLESTOREDB_DB,
     SINGLESTOREDB_HOST,
@@ -553,7 +554,7 @@ def test_create_table_storage_type_sql():
 
 
 @pytest.mark.parametrize(
-    "attr",
+    "name",
     [
         "globals",
         "locals",
@@ -563,24 +564,110 @@ def test_create_table_storage_type_sql():
         "cluster_vars",
     ],
 )
-def test_variable_accessors(con, attr):
-    accessor = getattr(con, attr)
-    assert accessor is getattr(con.con, attr)
+def test_variable_accessors(con, name):
+    accessor = getattr(server, name)(con)
+    assert accessor is getattr(con.con, name)
 
 
 def test_variable_accessor_values(con):
-    assert int(con.globals["max_connections"]) > 0
-    assert con.locals["autocommit"] in (True, 1, "ON")
+    assert int(server.globals(con)["max_connections"]) > 0
+    assert server.locals(con)["autocommit"] in (True, 1, "ON")
 
 
 def test_show_accessor(con):
     table_name = gen_name("show")
     con.create_table(table_name, schema=ibis.schema({"x": "int64"}))
     try:
-        names = [row["Name"] for row in con.show.tables()]
+        names = [row["Name"] for row in server.show(con).tables()]
         assert table_name in names
         assert IBIS_TEST_SINGLESTOREDB_DB in [
-            row["Name"] for row in con.show.databases()
+            row["Name"] for row in server.show(con).databases()
         ]
     finally:
         con.drop_table(table_name, force=True)
+
+
+@pytest.mark.parametrize("name", ["show", "globals", "locals", "vars", "cluster_vars"])
+def test_backend_has_no_accessors(con, name):
+    assert not hasattr(con, name)
+
+
+@pytest.fixture
+def stats_table(con):
+    table_name = gen_name("stats")
+    t = con.create_table(table_name, schema=ibis.schema({"x": "int64", "y": "string"}))
+    con.insert(table_name, pd.DataFrame({"x": [1, 2, 3], "y": ["a", "b", None]}))
+    yield t
+    con.drop_table(table_name, force=True)
+
+
+@pytest.mark.parametrize("by", ["name", "table"])
+def test_get_table_stats(con, stats_table, by):
+    table = stats_table.get_name() if by == "name" else stats_table
+    stats = server.get_table_stats(con, table)
+    result = stats.execute()
+    assert len(result) > 0
+    assert set(result.TABLE_NAME) == {stats_table.get_name()}
+    assert stats.ROWS.sum().execute() == 3
+
+
+def test_get_table_stats_database(con, stats_table):
+    name = stats_table.get_name()
+    stats = server.get_table_stats(con, name, database=IBIS_TEST_SINGLESTOREDB_DB)
+    assert stats.ROWS.sum().execute() == 3
+    missing = server.get_table_stats(con, name, database="ibis_no_such_db")
+    assert missing.count().execute() == 0
+
+
+def test_get_table_stats_rejects_expression(con, stats_table):
+    with pytest.raises(TypeError, match="database table"):
+        server.get_table_stats(con, stats_table.select("x"))
+
+
+def test_get_storage_info(con, stats_table):
+    result = server.get_storage_info(con).execute()
+    assert set(result.DATABASE_NAME) == {IBIS_TEST_SINGLESTOREDB_DB}
+    assert stats_table.get_name() in set(result.TABLE_NAME)
+
+
+def test_get_column_statistics(con, stats_table):
+    con.raw_sql(f"ANALYZE TABLE `{stats_table.get_name()}`").close()
+    result = server.get_column_statistics(con, stats_table).execute()
+    assert set(result.COLUMN_NAME) == {"x", "y"}
+    assert set(result.TABLE_NAME) == {stats_table.get_name()}
+    result = server.get_column_statistics(con, stats_table, "y").execute()
+    assert list(result.COLUMN_NAME) == ["y"]
+
+
+def test_get_workload_metrics(con):
+    result = server.get_workload_metrics(con).execute()
+    assert {"NODE_ID", "STAT", "VALUE"} <= set(result.columns)
+    assert len(result) > 0
+
+
+@pytest.mark.parametrize("by", ["name", "table"])
+def test_optimize_table(con, stats_table, by):
+    table = stats_table.get_name() if by == "name" else stats_table
+    server.optimize_table(con, table)
+    assert stats_table.count().execute() == 3
+
+
+def test_optimize_table_sql(monkeypatch):
+    from ibis.backends.singlestoredb import Backend
+
+    monkeypatch.setattr(Backend, "current_database", "db")
+    con = Backend()
+    sql = []
+
+    @contextlib.contextmanager
+    def raw_sql(stmt):
+        sql.append(stmt)
+        yield
+
+    con.raw_sql = raw_sql
+    server.optimize_table(con, "my`table")
+    server.optimize_table(con, "t", database="other")
+    assert sql == [
+        "OPTIMIZE TABLE `db`.`my``table` FULL",
+        "OPTIMIZE TABLE `other`.`t` FULL",
+    ]

@@ -182,8 +182,27 @@ def sigmoid(x: float) -> float: ...
 t.select(p=sigmoid(t.score))
 ```
 
-Server variables and `SHOW` commands are available through `con.globals`,
-`con.locals`, `con.vars`, and `con.show`, e.g. `con.show.tables()`.
+## Server variables and table maintenance
+
+`ibis.backends.singlestoredb.server` has functions that take a connection
+for server variables, `SHOW` commands and table statistics:
+
+```python
+from ibis.backends.singlestoredb import server
+
+server.globals(con)["max_connections"]
+server.locals(con)["autocommit"] = False
+server.show(con).tables()
+
+server.get_table_stats(con, "users").ROWS.sum().execute()
+server.optimize_table(con, "users")
+```
+
+The variable accessors are `globals`, `locals`, `vars`, `cluster_globals`,
+`cluster_locals` and `cluster_vars`. `get_storage_info`, `get_table_stats`,
+`get_column_statistics` and `get_workload_metrics` return tables built from
+`information_schema` views, so you can filter and aggregate them before
+executing.
 
 ```{python}
 #| echo: false

@@ -143,41 +143,6 @@ class Backend(
         """Return the database connection for compatibility with base class."""
         return self._client
 
-    @property
-    def show(self) -> Any:
-        """Accessor for SHOW commands, e.g. `con.show.tables()`."""
-        return self.con.show
-
-    @property
-    def globals(self) -> Any:
-        """Accessor for global server variables."""
-        return self.con.globals
-
-    @property
-    def locals(self) -> Any:
-        """Accessor for session server variables."""
-        return self.con.locals
-
-    @property
-    def cluster_globals(self) -> Any:
-        """Accessor for cluster-wide global server variables."""
-        return self.con.cluster_globals
-
-    @property
-    def cluster_locals(self) -> Any:
-        """Accessor for cluster-wide session server variables."""
-        return self.con.cluster_locals
-
-    @property
-    def vars(self) -> Any:
-        """Accessor for server variables (session, falling back to global)."""
-        return self.con.vars
-
-    @property
-    def cluster_vars(self) -> Any:
-        """Accessor for cluster-wide server variables."""
-        return self.con.cluster_vars
-
     def _get_autocommit(self, con) -> bool:
         """Get autocommit state for both MySQL and HTTP connections.
 
