@@ -182,10 +182,10 @@ def sigmoid(x: float) -> float: ...
 t.select(p=sigmoid(t.score))
 ```
 
-## Server variables and table maintenance
+## Server variables
 
 `ibis.backends.singlestoredb.server` has functions that take a connection
-for server variables, `SHOW` commands and table statistics:
+for server variables and `SHOW` commands:
 
 ```python
 from ibis.backends.singlestoredb import server
@@ -193,16 +193,10 @@ from ibis.backends.singlestoredb import server
 server.globals(con)["max_connections"]
 server.locals(con)["autocommit"] = False
 server.show(con).tables()
-
-server.get_table_stats(con, "users").ROWS.sum().execute()
-server.optimize_table(con, "users")
 ```
 
 The variable accessors are `globals`, `locals`, `vars`, `cluster_globals`,
-`cluster_locals` and `cluster_vars`. `get_storage_info`, `get_table_stats`,
-`get_column_statistics` and `get_workload_metrics` return tables built from
-`information_schema` views, so you can filter and aggregate them before
-executing.
+`cluster_locals` and `cluster_vars`.
 
 ```{python}
 #| echo: false
